@@ -44,25 +44,27 @@ func (r *userRepository) GetAll() ([]model.User, error) {
 }
 
 func (r *userRepository) GetByUsername(username string) (*model.User, error) {
-	var u model.User
-	if err := r.db.QueryRowContext(context.Background(), `SELECT id, username, email, full_name FROM users WHERE username = $1`, username).
-		Scan(&u.ID, &u.Username, &u.Email, &u.FullName); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
+	var user model.User
+
+	if err := r.db.QueryRowContext(
+		context.Background(),
+		`SELECT id, username, email, full_name FROM users WHERE username = $1`,
+		username).Scan(&user.ID, &user.Username, &user.Email, &user.FullName); err != nil {
 		return nil, err
 	}
-	return &u, nil
+
+	return &user, nil
 }
 
 func (r *userRepository) GetByID(id int64) (*model.User, error) {
-	var u model.User
-	if err := r.db.QueryRowContext(context.Background(), `SELECT id, username, email, full_name FROM users WHERE id = $1`, id).
-		Scan(&u.ID, &u.Username, &u.Email, &u.FullName); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
+	var user model.User
+
+	if err := r.db.QueryRowContext(
+		context.Background(),
+		`SELECT id, username, email, full_name FROM users WHERE id = $1`,
+		id).Scan(&user.ID, &user.Username, &user.Email, &user.FullName); err != nil {
 		return nil, err
 	}
-	return &u, nil
+
+	return &user, nil
 }

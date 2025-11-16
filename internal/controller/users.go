@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"cruder/internal/model"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -31,12 +33,7 @@ func (c *UserController) GetUserByUsername(ctx *gin.Context) {
 	username := ctx.Param("username")
 
 	user, err := c.service.GetByUsername(username)
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-
-	ctx.JSON(http.StatusOK, user)
+	createSingleUserResponse(user, err, ctx)
 }
 
 func (c *UserController) GetUserByID(ctx *gin.Context) {
@@ -48,8 +45,16 @@ func (c *UserController) GetUserByID(ctx *gin.Context) {
 	}
 
 	user, err := c.service.GetByID(id)
-	if err != nil {
+	createSingleUserResponse(user, err, ctx)
+}
+
+func createSingleUserResponse(user *model.User, err error, ctx *gin.Context) {
+	if errors.Is(err, service.ErrNoUsers) {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 

@@ -12,22 +12,22 @@ import (
 )
 
 func main() {
-	dsn := os.Getenv("POSTGRES_DSN")
-	if dsn == "" {
-		dsn = "host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable"
+	dataSourceName := os.Getenv("POSTGRES_DSN")
+	if dataSourceName == "" {
+		dataSourceName = "host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable"
 	}
 
-	dbConn, err := repository.NewPostgresConnection(dsn)
+	dbConnection, err := repository.NewPostgresConnection(dataSourceName)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 
-	repositories := repository.NewRepository(dbConn.DB())
+	repositories := repository.NewRepository(dbConnection.DB())
 	services := service.NewService(repositories)
 	controllers := controller.NewController(services)
-	r := gin.Default()
-	handler.New(r, controllers.Users)
-	if err := r.Run(); err != nil {
+	httpRouterEngine := gin.Default()
+	handler.New(httpRouterEngine, controllers.Users)
+	if err := httpRouterEngine.Run(); err != nil {
 		log.Fatalf("failed to run server: %v", err)
 	}
 }
