@@ -21,26 +21,34 @@ func NewUserRepository(db *sql.DB) UserRepository {
 }
 
 func (r *userRepository) GetAll() ([]model.User, error) {
-	rows, err := r.db.QueryContext(context.Background(), `SELECT id, username, email, full_name FROM users`)
+	rows, err := r.db.QueryContext(
+		context.Background(),
+		`SELECT id, uuid, username, email, full_name FROM users`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var users []model.User
+	var usersCount int
+	err = r.db.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM users").Scan(&usersCount)
+	if err != nil {
+		return nil, err
+	}
+
+	allUsers := make([]model.User, 0, usersCount)
 	for rows.Next() {
-		var u model.User
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.FullName); err != nil {
+		var user model.User
+		if err := rows.Scan(&user.ID, &user.UUID, &user.Username, &user.Email, &user.FullName); err != nil {
 			return nil, err
 		}
-		users = append(users, u)
+		allUsers = append(allUsers, user)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	return users, nil
+	return allUsers, nil
 }
 
 func (r *userRepository) GetByUsername(username string) (*model.User, error) {
@@ -48,8 +56,8 @@ func (r *userRepository) GetByUsername(username string) (*model.User, error) {
 
 	if err := r.db.QueryRowContext(
 		context.Background(),
-		`SELECT id, username, email, full_name FROM users WHERE username = $1`,
-		username).Scan(&user.ID, &user.Username, &user.Email, &user.FullName); err != nil {
+		`SELECT id, uuid, username, email, full_name FROM users WHERE username = $1`,
+		username).Scan(&user.ID, &user.UUID, &user.Username, &user.Email, &user.FullName); err != nil {
 		return nil, err
 	}
 
@@ -61,8 +69,8 @@ func (r *userRepository) GetByID(id int64) (*model.User, error) {
 
 	if err := r.db.QueryRowContext(
 		context.Background(),
-		`SELECT id, username, email, full_name FROM users WHERE id = $1`,
-		id).Scan(&user.ID, &user.Username, &user.Email, &user.FullName); err != nil {
+		`SELECT id, uuid, username, email, full_name FROM users WHERE id = $1`,
+		id).Scan(&user.ID, &user.UUID, &user.Username, &user.Email, &user.FullName); err != nil {
 		return nil, err
 	}
 

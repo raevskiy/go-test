@@ -5,7 +5,6 @@ import (
 	"cruder/internal/repository"
 	"database/sql"
 	"errors"
-	"log"
 )
 
 type UserService interface {
@@ -18,7 +17,7 @@ type userService struct {
 	repo repository.UserRepository
 }
 
-var ErrNoUsers = errors.New("service: no user matching the search criteria found")
+var BusinessErrNoUsers = errors.New("users not found")
 
 func NewUserService(repo repository.UserRepository) UserService {
 	return &userService{repo: repo}
@@ -42,9 +41,7 @@ func (s *userService) GetByID(id int64) (*model.User, error) {
 
 func getSingleUser(user *model.User, err error) (*model.User, error) {
 	if errors.Is(err, sql.ErrNoRows) {
-		log.Println("users not found")
-
-		return nil, ErrNoUsers
+		return nil, BusinessErrNoUsers
 	}
 
 	return user, err
