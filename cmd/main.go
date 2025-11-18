@@ -1,14 +1,10 @@
 package main
 
 import (
-	"cruder/internal/controller"
 	"cruder/internal/handler"
 	"cruder/internal/repository"
-	"cruder/internal/service"
 	"log"
 	"os"
-
-	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -22,12 +18,9 @@ func main() {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 
-	repositories := repository.NewRepository(dbConnection.DB())
-	services := service.NewService(repositories)
-	controllers := controller.NewController(services)
-	httpRouterEngine := gin.Default()
-	handler.New(httpRouterEngine, controllers.Users)
+	httpRouterEngine := handler.SetupAppLayersAndRouter(dbConnection.DB())
 	if err := httpRouterEngine.Run(); err != nil {
 		log.Fatalf("failed to run server: %v", err)
 	}
 }
+

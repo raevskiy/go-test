@@ -23,7 +23,7 @@ func NewUserRepository(db *sql.DB) UserRepository {
 func (r *userRepository) GetAll() ([]model.User, error) {
 	rows, err := r.db.QueryContext(
 		context.Background(),
-		`SELECT id, uuid, username, email, full_name FROM users`)
+		`SELECT id, uuid, username, email, full_name FROM users ORDER BY full_name`)
 	if err != nil {
 		return nil, err
 	}
