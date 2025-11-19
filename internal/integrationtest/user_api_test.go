@@ -17,11 +17,98 @@ import (
 	"time"
 )
 
-func startPostgresContainer(t *testing.T) (testcontainers.Container, string) {
+func TestGetAllUsers_Success(t *testing.T) {
+	//Arrange
+	gin.SetMode(gin.TestMode)
+	db := prepareDb(t)
+	router := handler.SetupAppLayersAndRouter(db)
+
+	//Act
+	req, _ := http.NewRequest("GET", "/api/v1/users/", nil)
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	//Assert
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, responseRecorder.Code)
+	}
+	var users []map[string]interface{}
+	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &users); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(users) != 3 + 2 {
+		t.Fatalf("expected 3 users from migration and 2 users added in this test, got %d", len(users))
+	}
+	assertThatUserNamesAreExpected(t, users[0], "asmith", "Alice Smith")
+	assertThatUserNamesAreExpected(t, users[4], "kim", "Kim Kitsuragi")
+}
+
+func TestGetUserByName_Success(t *testing.T) {
+	//Arrange
+	gin.SetMode(gin.TestMode)
+	db := prepareDb(t)
+	router := handler.SetupAppLayersAndRouter(db)
+
+	//Act
+	req, _ := http.NewRequest("GET", "/api/v1/users/username/kim", nil)
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	//Assert
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, responseRecorder.Code)
+	}
+	var user map[string]interface{}
+	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &user); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	assertThatUserNamesAreExpected(t, user, "kim", "Kim Kitsuragi")
+}
+
+func TestGetUserByName_Failure(t *testing.T) {
+	//Arrange
+	gin.SetMode(gin.TestMode)
+	db := prepareDb(t)
+	router := handler.SetupAppLayersAndRouter(db)
+
+	//Act
+	req, _ := http.NewRequest("GET", "/api/v1/users/username/klaasje", nil)
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	//Assert
+	if responseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected %d, got %d", http.StatusNotFound, responseRecorder.Code)
+	}
+	var jsonError map[string]interface{}
+	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &jsonError); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	assertThatErrorMessageIsExpected(t, jsonError, "users not found")
+}
+
+func prepareDb(t *testing.T) *sql.DB {
+	t.Helper()
+
+	dataSourceName := startPostgresContainer(t)
+	db, err := sql.Open("postgres", dataSourceName)
+	if err != nil {
+		t.Fatalf("failed to open DB: %v", err)
+	}
+	t.Cleanup(func() {
+		db.Close()
+	})
+
+	runMigrations(t, db, "../../migrations")
+	insertTestData(t, db)
+
+	return db
+}
+
+func startPostgresContainer(t *testing.T) string {
 	t.Helper()
 
 	ctx := context.Background()
-
 	postgresContainer, err := postgres.Run(ctx,
 		"postgres:17",
 		postgres.WithDatabase("testdb"),
@@ -34,7 +121,6 @@ func startPostgresContainer(t *testing.T) (testcontainers.Container, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	t.Cleanup(func() {
 		postgresContainer.Terminate(ctx)
 	})
@@ -47,17 +133,13 @@ func startPostgresContainer(t *testing.T) (testcontainers.Container, string) {
 	if err != nil {
 		t.Fatalf("failed to get mapped port: %v", err)
 	}
+	dataSourceName := fmt.Sprintf(
+		"postgres://postgres:postgres@%s:%s/testdb?sslmode=disable", host, port.Port())
 
-	dsn := fmt.Sprintf(
-		"postgres://postgres:postgres@%s:%s/testdb?sslmode=disable",
-		host,
-		port.Port(),
-	)
-
-	return postgresContainer, dsn
+	return dataSourceName
 }
 
-func runMigrations(t *testing.T, db *sql.DB, dsn string, migrationsDir string) {
+func runMigrations(t *testing.T, db *sql.DB, migrationsDir string) {
 	t.Helper()
 
 	if err := goose.SetDialect("postgres"); err != nil {
@@ -71,6 +153,7 @@ func runMigrations(t *testing.T, db *sql.DB, dsn string, migrationsDir string) {
 
 func insertTestData(t *testing.T, db *sql.DB) {
 	t.Helper()
+
 	_, err := db.Exec( `
         INSERT INTO users (username, email, full_name)
         VALUES
@@ -82,46 +165,19 @@ func insertTestData(t *testing.T, db *sql.DB) {
 	}
 }
 
-func TestGetAllUsers_Integration(t *testing.T) {
-	//Arrange
-	gin.SetMode(gin.TestMode)
+func assertThatUserNamesAreExpected(t *testing.T, user map[string]interface{}, expectedUserName string, expectedFullName string) {
+	t.Helper()
 
-	container, dsn := startPostgresContainer(t)
-	defer container.Terminate(context.Background())
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		t.Fatalf("failed to open DB: %v", err)
-	}
-	defer db.Close()
-
-	runMigrations(t, db, dsn, "../../migrations")
-
-	insertTestData(t, db)
-	router := handler.SetupAppLayersAndRouter(db)
-
-	//Act
-	req, _ := http.NewRequest("GET", "/api/v1/users/", nil)
-	rr := httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
-
-	//Assert
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
-	}
-
-	var users []map[string]interface{}
-	if err := json.Unmarshal(rr.Body.Bytes(), &users); err != nil {
-		t.Fatalf("invalid JSON: %v", err)
-	}
-	if len(users) != 3 + 2 {
-		t.Fatalf("expected 3 users from migration and 2 users added in this test, got %d", len(users))
-	}
-	expectoUser(t, users[0], "asmith", "Alice Smith")
-	expectoUser(t, users[4], "kim", "Kim Kitsuragi")
-}
-
-func expectoUser(t *testing.T, user map[string]interface{}, expectedUserName string, expectedFullName string) {
 	if user["username"] != expectedUserName || user["full_name"] != expectedFullName {
 		t.Fatalf("unexpected user: %+v", user)
 	}
 }
+
+func assertThatErrorMessageIsExpected(t *testing.T, jsonError map[string]interface{}, expectedMessage string) {
+	t.Helper()
+
+	if jsonError["error"] != expectedMessage {
+		t.Fatalf("unexpected error message: %+v", jsonError)
+	}
+}
+
