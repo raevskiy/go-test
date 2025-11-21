@@ -4,12 +4,14 @@ import (
 	"context"
 	"cruder/internal/model"
 	"database/sql"
+	"github.com/google/uuid"
 )
 
 type UserRepository interface {
 	GetAll() ([]model.User, error)
 	GetByUsername(username string) (*model.User, error)
 	GetByID(id int64) (*model.User, error)
+	DeleteByUuid(uuid uuid.UUID) error
 }
 
 type userRepository struct {
@@ -75,4 +77,22 @@ func (r *userRepository) GetByID(id int64) (*model.User, error) {
 	}
 
 	return &user, nil
+}
+
+func (r *userRepository) DeleteByUuid(uuid uuid.UUID) error {
+	res, err := r.db.ExecContext(context.Background(), `DELETE FROM users WHERE uuid = $1`, uuid)
+	if err != nil {
+		return err
+	}
+
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
 }

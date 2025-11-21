@@ -2,11 +2,12 @@ package integrationtest
 
 import (
 	"context"
-	"cruder/internal/handler"
+	"cruder/internal/core"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -18,20 +19,15 @@ import (
 )
 
 func TestGetAllUsers_Success(t *testing.T) {
-	//Arrange
 	gin.SetMode(gin.TestMode)
-	db := prepareDb(t)
-	router := handler.SetupAppLayersAndRouter(db)
+	db, _, _ := prepareDb(t)
+	_, router := core.SetupAppLayers(db)
 
-	//Act
 	req, _ := http.NewRequest("GET", "/api/v1/users/", nil)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
-	//Assert
-	if responseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected %d, got %d", http.StatusOK, responseRecorder.Code)
-	}
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusOK)
 	var users []map[string]interface{}
 	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &users); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
@@ -43,21 +39,16 @@ func TestGetAllUsers_Success(t *testing.T) {
 	assertThatUserNamesAreExpected(t, users[4], "kim", "Kim Kitsuragi")
 }
 
-func TestGetUserByName_Success(t *testing.T) {
-	//Arrange
+func TestGetUserByUsername_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db := prepareDb(t)
-	router := handler.SetupAppLayersAndRouter(db)
+	db, _, _ := prepareDb(t)
+	_, router := core.SetupAppLayers(db)
 
-	//Act
 	req, _ := http.NewRequest("GET", "/api/v1/users/username/kim", nil)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
-	//Assert
-	if responseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected %d, got %d", http.StatusOK, responseRecorder.Code)
-	}
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusOK)
 	var user map[string]interface{}
 	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &user); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
@@ -65,29 +56,76 @@ func TestGetUserByName_Success(t *testing.T) {
 	assertThatUserNamesAreExpected(t, user, "kim", "Kim Kitsuragi")
 }
 
-func TestGetUserByName_Failure(t *testing.T) {
-	//Arrange
+func TestGetUserByNonExistentUsername_Failure(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db := prepareDb(t)
-	router := handler.SetupAppLayersAndRouter(db)
+	db, _, _ := prepareDb(t)
+	_, router := core.SetupAppLayers(db)
 
-	//Act
 	req, _ := http.NewRequest("GET", "/api/v1/users/username/klaasje", nil)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
-	//Assert
-	if responseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected %d, got %d", http.StatusNotFound, responseRecorder.Code)
-	}
-	var jsonError map[string]interface{}
-	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &jsonError); err != nil {
-		t.Fatalf("invalid JSON: %v", err)
-	}
-	assertThatErrorMessageIsExpected(t, jsonError, "users not found")
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusNotFound)
+	assertThatErrorMessageIsExpected(t, responseRecorder, "users not found")
 }
 
-func prepareDb(t *testing.T) *sql.DB {
+func TestDeleteUserByUuid_Success(t *testing.T) {
+	harryUsername := "tequila_sunset";
+	gin.SetMode(gin.TestMode)
+	db, uuidHarry, _ := prepareDb(t)
+	repositories, router := core.SetupAppLayers(db)
+	user, err := repositories.Users.GetByUsername(harryUsername)
+	if user == nil || err != nil {
+		t.Fatalf("user %s is expected to be present in the DB", harryUsername)
+	}
+
+	req, _ := http.NewRequest("DELETE", "/api/v1/users/" + uuidHarry.String(), nil)
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusNoContent)
+	user, err = repositories.Users.GetByUsername(harryUsername)
+	if user != nil || err == nil {
+		t.Fatalf("user %s is expected to be absent in the DB", harryUsername)
+	}
+}
+
+func TestDeleteUserByInvalidUuid_Failure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _, _ := prepareDb(t)
+	repositories, router := core.SetupAppLayers(db)
+
+	req, _ := http.NewRequest("DELETE", "/api/v1/users/worst-uuid-ever", nil)
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusBadRequest)
+	assertThatErrorMessageIsExpected(t, responseRecorder, "invalid UUID")
+	users, _ := repositories.Users.GetAll()
+	if len(users) != 3 + 2 {
+		t.Fatalf("expected all users remain present in the DB")
+	}
+}
+
+func TestDeleteUserByINonExistentUuid_Failure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _, _ := prepareDb(t)
+	repositories, router := core.SetupAppLayers(db)
+
+	randomUuid, _ := uuid.NewRandom()
+	req, _ := http.NewRequest("DELETE", "/api/v1/users/" + randomUuid.String(), nil)
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusNotFound)
+	assertThatErrorMessageIsExpected(t, responseRecorder, "users not found")
+	users, _ := repositories.Users.GetAll()
+	if len(users) != 3 + 2 {
+		t.Fatalf("expected all users remain present in the DB")
+	}
+}
+
+func prepareDb(t *testing.T) (*sql.DB, uuid.UUID, uuid.UUID) {
 	t.Helper()
 
 	dataSourceName := startPostgresContainer(t)
@@ -100,9 +138,9 @@ func prepareDb(t *testing.T) *sql.DB {
 	})
 
 	runMigrations(t, db, "../../migrations")
-	insertTestData(t, db)
+	uuidHarry, uuidKim := insertTestData(t, db)
 
-	return db
+	return db, uuidHarry, uuidKim
 }
 
 func startPostgresContainer(t *testing.T) string {
@@ -151,17 +189,32 @@ func runMigrations(t *testing.T, db *sql.DB, migrationsDir string) {
 	}
 }
 
-func insertTestData(t *testing.T, db *sql.DB) {
+func insertTestData(t *testing.T, db *sql.DB) (uuid.UUID, uuid.UUID) {
 	t.Helper()
 
-	_, err := db.Exec( `
-        INSERT INTO users (username, email, full_name)
+	uuidHarry, errHarry := uuid.NewRandom()
+	uuidKim, errKim := uuid.NewRandom()
+	if errHarry != nil || errKim != nil {
+		t.Fatalf("failed to generate UUIDs")
+	}
+	_, err := db.ExecContext(context.Background(), `
+        INSERT INTO users (uuid, username, email, full_name)
         VALUES
-        ('tequila_sunset', 'harrier.dubois@rcm.org', 'Harrier Du Bois'),
-        ('kim',   'kim.kitsuragi@rcm.com', 'Kim Kitsuragi');
-    `)
+        ($1, 'tequila_sunset', 'harrier.dubois@rcm.org', 'Harrier Du Bois'),
+        ($2, 'kim',   'kim.kitsuragi@rcm.com', 'Kim Kitsuragi');
+    `, uuidHarry, uuidKim)
 	if err != nil {
 		t.Fatalf("failed to insert data: %v", err)
+	}
+
+	return uuidHarry, uuidKim
+}
+
+func assertThatResponseCodeIsExpected(t *testing.T, responseRecorder *httptest.ResponseRecorder, expectedCode int) {
+	t.Helper()
+
+	if responseRecorder.Code != expectedCode {
+		t.Fatalf("expected %d, got %d", expectedCode, responseRecorder.Code)
 	}
 }
 
@@ -173,8 +226,13 @@ func assertThatUserNamesAreExpected(t *testing.T, user map[string]interface{}, e
 	}
 }
 
-func assertThatErrorMessageIsExpected(t *testing.T, jsonError map[string]interface{}, expectedMessage string) {
+func assertThatErrorMessageIsExpected(t *testing.T, responseRecorder *httptest.ResponseRecorder, expectedMessage string) {
 	t.Helper()
+
+	var jsonError map[string]interface{}
+	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &jsonError); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
 
 	if jsonError["error"] != expectedMessage {
 		t.Fatalf("unexpected error message: %+v", jsonError)

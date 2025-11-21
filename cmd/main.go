@@ -1,7 +1,7 @@
 package main
 
 import (
-	"cruder/internal/handler"
+	"cruder/internal/core"
 	"cruder/internal/repository"
 	"log"
 	"os"
@@ -18,7 +18,7 @@ func main() {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 
-	httpRouterEngine := handler.SetupAppLayersAndRouter(dbConnection.DB())
+	_, httpRouterEngine := core.SetupAppLayers(dbConnection.DB())
 	if err := httpRouterEngine.Run(); err != nil {
 		log.Fatalf("failed to run server: %v", err)
 	}

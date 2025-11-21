@@ -4,6 +4,7 @@ import (
 	"cruder/internal/controller/dto"
 	"cruder/internal/model"
 	"errors"
+	"github.com/google/uuid"
 	"net/http"
 	"strconv"
 
@@ -19,6 +20,7 @@ type UserController struct {
 const errorKey = "error"
 const genericServerErrorValue = "It's not you. It's us. We are already working on it."
 const invalidIdClientErrorValue = "invalid id"
+const invalidUuidIdClientErrorValue = "invalid UUID"
 
 func NewUserController(service service.UserService) *UserController {
 	return &UserController{service: service}
@@ -53,6 +55,18 @@ func (c *UserController) GetUserByID(ctx *gin.Context) {
 	createSingleUserResponse(user, err, ctx)
 }
 
+func (c *UserController) DeleteUserByUuid(ctx *gin.Context) {
+	uuidStr := ctx.Param("uuid")
+	aUuid, err := uuid.Parse(uuidStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{errorKey: invalidUuidIdClientErrorValue})
+		return
+	}
+
+	err = c.service.DeleteByUuid(aUuid)
+	createNoContentResponse(err, ctx)
+}
+
 func createSingleUserResponse(user *model.User, err error, ctx *gin.Context) {
 	if errors.Is(err, service.BusinessErrNoUsers) {
 		ctx.JSON(http.StatusNotFound, gin.H{errorKey: err.Error()})
@@ -64,6 +78,19 @@ func createSingleUserResponse(user *model.User, err error, ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, toUserResponse(user))
+}
+
+func createNoContentResponse(err error, ctx *gin.Context) {
+	if errors.Is(err, service.BusinessErrNoUsers) {
+		ctx.JSON(http.StatusNotFound, gin.H{errorKey: err.Error()})
+		return
+	}
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{errorKey: genericServerErrorValue})
+		return
+	}
+
+	ctx.JSON(http.StatusNoContent, nil)
 }
 
 func toUserResponses(users []model.User) []dto.UserResponse {
