@@ -2,9 +2,14 @@ package repository
 
 import (
 	"context"
+	"cruder/internal/controller/dto"
 	"cruder/internal/model"
 	"database/sql"
+	"errors"
+	"fmt"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
+	"strings"
 )
 
 type UserRepository interface {
@@ -12,11 +17,18 @@ type UserRepository interface {
 	GetByUsername(username string) (*model.User, error)
 	GetByID(id int64) (*model.User, error)
 	DeleteByUuid(uuid uuid.UUID) error
+	PartiallyUpdateByUUID(uuid uuid.UUID, patch dto.UserPatch) error
 }
 
 type userRepository struct {
 	db *sql.DB
 }
+
+var BusinessErrNoUsers = errors.New("users not found")
+var BusinessErrUsernameTaken = errors.New("the username is already taken")
+var BusinessErrEmailTaken = errors.New("the email is already in use")
+var BusinessErrUnknownConflict = errors.New("unknown conflict")
+const uniqueConstraintViolationCode = "23505"
 
 func NewUserRepository(db *sql.DB) UserRepository {
 	return &userRepository{db: db}
@@ -60,6 +72,9 @@ func (r *userRepository) GetByUsername(username string) (*model.User, error) {
 		context.Background(),
 		`SELECT id, uuid, username, email, full_name FROM users WHERE username = $1`,
 		username).Scan(&user.ID, &user.UUID, &user.Username, &user.Email, &user.FullName); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, BusinessErrNoUsers
+		}
 		return nil, err
 	}
 
@@ -73,6 +88,9 @@ func (r *userRepository) GetByID(id int64) (*model.User, error) {
 		context.Background(),
 		`SELECT id, uuid, username, email, full_name FROM users WHERE id = $1`,
 		id).Scan(&user.ID, &user.UUID, &user.Username, &user.Email, &user.FullName); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, BusinessErrNoUsers
+		}
 		return nil, err
 	}
 
@@ -80,19 +98,92 @@ func (r *userRepository) GetByID(id int64) (*model.User, error) {
 }
 
 func (r *userRepository) DeleteByUuid(uuid uuid.UUID) error {
-	res, err := r.db.ExecContext(context.Background(), `DELETE FROM users WHERE uuid = $1`, uuid)
+	result, err := r.db.ExecContext(context.Background(), `DELETE FROM users WHERE uuid = $1`, uuid)
 	if err != nil {
 		return err
 	}
 
-	affected, err := res.RowsAffected()
+	affected, err := result.RowsAffected()
 	if err != nil {
 		return err
 	}
 
 	if affected == 0 {
-		return sql.ErrNoRows
+		return BusinessErrNoUsers
 	}
 
 	return nil
+}
+
+func (r *userRepository) PartiallyUpdateByUUID(
+	uuid uuid.UUID,
+	patch dto.UserPatch,
+) error {
+	setParts := []string{}
+	args := []interface{}{}
+	sqlPlaceholderIndex := 1
+
+	if patch.Username != nil {
+		setParts = append(setParts, fmt.Sprintf("username = $%d", sqlPlaceholderIndex))
+		args = append(args, patch.Username)
+		sqlPlaceholderIndex++
+	}
+
+	if patch.Email != nil {
+		setParts = append(setParts, fmt.Sprintf("email = $%d", sqlPlaceholderIndex))
+		args = append(args, patch.Email)
+		sqlPlaceholderIndex++
+	}
+
+	if patch.FullName != nil {
+		setParts = append(setParts, fmt.Sprintf("full_name = $%d", sqlPlaceholderIndex))
+		if patch.FullName.Value == nil {
+			args = append(args, nil)
+		} else {
+			args = append(args, patch.FullName.Value)
+		}
+		sqlPlaceholderIndex++
+	}
+
+	if len(setParts) == 0 {
+		return nil
+	}
+
+	args = append(args, uuid)
+
+	query := fmt.Sprintf(`
+        UPDATE users
+        SET %s
+        WHERE uuid = $%d
+    `, strings.Join(setParts, ", "), sqlPlaceholderIndex)
+
+	result, err := r.db.ExecContext(context.Background(), query, args...)
+	if err != nil {
+		var pgErr *pq.Error
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case uniqueConstraintViolationCode:
+				switch pgErr.Constraint {
+				case "users_username_key":
+					return BusinessErrUsernameTaken
+				case "users_email_key":
+					return BusinessErrEmailTaken
+				default:
+					return BusinessErrUnknownConflict
+				}
+			}
+		}
+
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return BusinessErrNoUsers
+	}
+
+	return err
 }

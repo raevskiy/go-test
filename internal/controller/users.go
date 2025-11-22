@@ -3,6 +3,7 @@ package controller
 import (
 	"cruder/internal/controller/dto"
 	"cruder/internal/model"
+	"cruder/internal/repository"
 	"errors"
 	"github.com/google/uuid"
 	"net/http"
@@ -67,8 +68,26 @@ func (c *UserController) DeleteUserByUuid(ctx *gin.Context) {
 	createNoContentResponse(err, ctx)
 }
 
+func (c *UserController) PatchUserByUuid(ctx *gin.Context) {
+	uuidStr := ctx.Param("uuid")
+	aUuid, err := uuid.Parse(uuidStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{errorKey: invalidUuidIdClientErrorValue})
+		return
+	}
+
+	var patch dto.UserPatch
+	if err := ctx.ShouldBindJSON(&patch); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	err = c.service.PartiallyUpdateByUuid(aUuid, patch)
+	createNoContentResponse(err, ctx)
+}
+
 func createSingleUserResponse(user *model.User, err error, ctx *gin.Context) {
-	if errors.Is(err, service.BusinessErrNoUsers) {
+	if errors.Is(err, repository.BusinessErrNoUsers) {
 		ctx.JSON(http.StatusNotFound, gin.H{errorKey: err.Error()})
 		return
 	}
@@ -81,8 +100,14 @@ func createSingleUserResponse(user *model.User, err error, ctx *gin.Context) {
 }
 
 func createNoContentResponse(err error, ctx *gin.Context) {
-	if errors.Is(err, service.BusinessErrNoUsers) {
+	if errors.Is(err, repository.BusinessErrNoUsers) {
 		ctx.JSON(http.StatusNotFound, gin.H{errorKey: err.Error()})
+		return
+	}
+	if errors.Is(err, repository.BusinessErrUsernameTaken) ||
+		errors.Is(err, repository.BusinessErrEmailTaken) ||
+		errors.Is(err, repository.BusinessErrUnknownConflict) {
+		ctx.JSON(http.StatusConflict, gin.H{errorKey: err.Error()})
 		return
 	}
 	if err != nil {
@@ -102,10 +127,15 @@ func toUserResponses(users []model.User) []dto.UserResponse {
 }
 
 func toUserResponse(user *model.User) dto.UserResponse {
+	var fullName *string
+	if user.FullName.Valid {
+		fullName = &user.FullName.String
+	}
+
 	return dto.UserResponse{
 		UUID:     user.UUID,
 		Username: user.Username,
 		Email:    user.Email,
-		FullName: user.FullName,
+		FullName: fullName,
 	}
 }

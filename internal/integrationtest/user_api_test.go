@@ -1,6 +1,7 @@
 package integrationtest
 
 import (
+	"bytes"
 	"context"
 	"cruder/internal/core"
 	"database/sql"
@@ -23,7 +24,7 @@ func TestGetAllUsers_Success(t *testing.T) {
 	db, _, _ := prepareDb(t)
 	_, router := core.SetupAppLayers(db)
 
-	req, _ := http.NewRequest("GET", "/api/v1/users/", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/users/", nil)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -32,11 +33,11 @@ func TestGetAllUsers_Success(t *testing.T) {
 	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &users); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
-	if len(users) != 3 + 2 {
-		t.Fatalf("expected 3 users from migration and 2 users added in this test, got %d", len(users))
+	if len(users) != 2 {
+		t.Fatalf("expected 2 users added in this test, got %d", len(users))
 	}
-	assertThatUserNamesAreExpected(t, users[0], "asmith", "Alice Smith")
-	assertThatUserNamesAreExpected(t, users[4], "kim", "Kim Kitsuragi")
+	assertThatUserNamesAreExpected(t, users[0], "tequila_sunset", "Harrier Du Bois")
+	assertThatUserNamesAreExpected(t, users[1], "kim", "Kim Kitsuragi")
 }
 
 func TestGetUserByUsername_Success(t *testing.T) {
@@ -44,7 +45,7 @@ func TestGetUserByUsername_Success(t *testing.T) {
 	db, _, _ := prepareDb(t)
 	_, router := core.SetupAppLayers(db)
 
-	req, _ := http.NewRequest("GET", "/api/v1/users/username/kim", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/users/username/kim", nil)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -61,7 +62,7 @@ func TestGetUserByNonExistentUsername_Failure(t *testing.T) {
 	db, _, _ := prepareDb(t)
 	_, router := core.SetupAppLayers(db)
 
-	req, _ := http.NewRequest("GET", "/api/v1/users/username/klaasje", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/users/username/klaasje", nil)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -70,7 +71,7 @@ func TestGetUserByNonExistentUsername_Failure(t *testing.T) {
 }
 
 func TestDeleteUserByUuid_Success(t *testing.T) {
-	harryUsername := "tequila_sunset";
+	harryUsername := "tequila_sunset"
 	gin.SetMode(gin.TestMode)
 	db, uuidHarry, _ := prepareDb(t)
 	repositories, router := core.SetupAppLayers(db)
@@ -79,7 +80,7 @@ func TestDeleteUserByUuid_Success(t *testing.T) {
 		t.Fatalf("user %s is expected to be present in the DB", harryUsername)
 	}
 
-	req, _ := http.NewRequest("DELETE", "/api/v1/users/" + uuidHarry.String(), nil)
+	req, _ := http.NewRequest(http.MethodDelete, "/api/v1/users/" + uuidHarry.String(), nil)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -95,14 +96,14 @@ func TestDeleteUserByInvalidUuid_Failure(t *testing.T) {
 	db, _, _ := prepareDb(t)
 	repositories, router := core.SetupAppLayers(db)
 
-	req, _ := http.NewRequest("DELETE", "/api/v1/users/worst-uuid-ever", nil)
+	req, _ := http.NewRequest(http.MethodDelete, "/api/v1/users/worst-uuid-ever", nil)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
 	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusBadRequest)
 	assertThatErrorMessageIsExpected(t, responseRecorder, "invalid UUID")
 	users, _ := repositories.Users.GetAll()
-	if len(users) != 3 + 2 {
+	if len(users) != 2 {
 		t.Fatalf("expected all users remain present in the DB")
 	}
 }
@@ -113,16 +114,148 @@ func TestDeleteUserByINonExistentUuid_Failure(t *testing.T) {
 	repositories, router := core.SetupAppLayers(db)
 
 	randomUuid, _ := uuid.NewRandom()
-	req, _ := http.NewRequest("DELETE", "/api/v1/users/" + randomUuid.String(), nil)
+	req, _ := http.NewRequest(http.MethodDelete, "/api/v1/users/" + randomUuid.String(), nil)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
 	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusNotFound)
 	assertThatErrorMessageIsExpected(t, responseRecorder, "users not found")
 	users, _ := repositories.Users.GetAll()
-	if len(users) != 3 + 2 {
+	if len(users) != 2 {
 		t.Fatalf("expected all users remain present in the DB")
 	}
+}
+
+func TestPatchUserByUuid_Success(t *testing.T) {
+	harryUsername := "tequila_sunset"
+	gin.SetMode(gin.TestMode)
+	db, uuidHarry, _ := prepareDb(t)
+	repositories, router := core.SetupAppLayers(db)
+
+	body := `{"full_name": {"value": "Raphaël Ambrosius Costeau"}}`
+	req, _ := http.NewRequest(
+		http.MethodPatch, "/api/v1/users/" + uuidHarry.String(), bytes.NewBuffer([]byte(body)))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusNoContent)
+	user, _ := repositories.Users.GetByUsername(harryUsername)
+	if user.FullName.String != "Raphaël Ambrosius Costeau" {
+		t.Fatalf("user %s has an unxpected full name %s", harryUsername, user.FullName.String)
+	}
+}
+
+func TestPatchUserByUuidWithNullFullName_Success(t *testing.T) {
+	harryUsername := "tequila_sunset"
+	gin.SetMode(gin.TestMode)
+	db, uuidHarry, _ := prepareDb(t)
+	repositories, router := core.SetupAppLayers(db)
+
+	body := `{"full_name": null}`
+	req, _ := http.NewRequest(
+		http.MethodPatch, "/api/v1/users/" + uuidHarry.String(), bytes.NewBuffer([]byte(body)))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusNoContent)
+	user, _ := repositories.Users.GetByUsername(harryUsername)
+	if !user.FullName.Valid {
+		t.Fatalf("user %s has an unxpected NULL full name", harryUsername)
+	}
+}
+
+func TestPatchUserByUuidWithExplicitlyErasedFullName_Success(t *testing.T) {
+	harryUsername := "tequila_sunset"
+	gin.SetMode(gin.TestMode)
+	db, uuidHarry, _ := prepareDb(t)
+	repositories, router := core.SetupAppLayers(db)
+
+	body := `{"full_name": {"value": null}}`
+	req, _ := http.NewRequest(
+		http.MethodPatch, "/api/v1/users/" + uuidHarry.String(), bytes.NewBuffer([]byte(body)))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusNoContent)
+	user, _ := repositories.Users.GetByUsername(harryUsername)
+	if user.FullName.Valid {
+		t.Fatalf("user %s has an unxpected full name %s", harryUsername, user.FullName.String)
+	}
+}
+
+func TestPatchUserByUuidWithImplicitlyErasedFullName_Success(t *testing.T) {
+	harryUsername := "tequila_sunset"
+	gin.SetMode(gin.TestMode)
+	db, uuidHarry, _ := prepareDb(t)
+	repositories, router := core.SetupAppLayers(db)
+
+	body := `{"full_name": {}}`
+	req, _ := http.NewRequest(
+		http.MethodPatch, "/api/v1/users/" + uuidHarry.String(), bytes.NewBuffer([]byte(body)))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusNoContent)
+	user, _ := repositories.Users.GetByUsername(harryUsername)
+	if user.FullName.Valid {
+		t.Fatalf("user %s has an unxpected full name %s", harryUsername, user.FullName.String)
+	}
+}
+
+func TestPatchUserByUuidWithExistingUsername_Failure(t *testing.T) {
+	kimUsername := "kim"
+	gin.SetMode(gin.TestMode)
+	db, uuidHarry, _ := prepareDb(t)
+	repositories, router := core.SetupAppLayers(db)
+
+	body := `{"username": "kim"}`
+	req, _ := http.NewRequest(
+		http.MethodPatch, "/api/v1/users/" + uuidHarry.String(), bytes.NewBuffer([]byte(body)))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusConflict)
+	assertThatErrorMessageIsExpected(t, responseRecorder, "the username is already taken")
+	user, _ := repositories.Users.GetByUsername(kimUsername)
+	if user.FullName.String != "Kim Kitsuragi" {
+		t.Fatalf("user %s has an unxpected full name %s", kimUsername, user.FullName.String)
+	}
+}
+
+func TestPatchUserByUuidWithExistingEmail_Failure(t *testing.T) {
+	harryUsername := "tequila_sunset"
+	gin.SetMode(gin.TestMode)
+	db, uuidHarry, _ := prepareDb(t)
+	repositories, router := core.SetupAppLayers(db)
+
+	body := `{"email": "kim.kitsuragi@rcm.org"}`
+	req, _ := http.NewRequest(
+		http.MethodPatch, "/api/v1/users/" + uuidHarry.String(), bytes.NewBuffer([]byte(body)))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusConflict)
+	assertThatErrorMessageIsExpected(t, responseRecorder, "the email is already in use")
+	user, _ := repositories.Users.GetByUsername(harryUsername)
+	if user.Email != "harrier.dubois@rcm.org" {
+		t.Fatalf("user %s has an unxpected email %s", harryUsername, user.Email)
+	}
+}
+
+func TestPatchUserByUuidWithNonExistentUuid_Failure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _, _ := prepareDb(t)
+	_, router := core.SetupAppLayers(db)
+	body := `{"username": "klaasje"}`
+	randomUuid, _ := uuid.NewRandom()
+
+	req, _ := http.NewRequest(
+		http.MethodPatch, "/api/v1/users/" + randomUuid.String(), bytes.NewBuffer([]byte(body)))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusNotFound)
+	assertThatErrorMessageIsExpected(t, responseRecorder, "users not found")
 }
 
 func prepareDb(t *testing.T) (*sql.DB, uuid.UUID, uuid.UUID) {
@@ -137,7 +270,7 @@ func prepareDb(t *testing.T) (*sql.DB, uuid.UUID, uuid.UUID) {
 		db.Close()
 	})
 
-	runMigrations(t, db, "../../migrations")
+	runMigrations(t, db, "../../migrations", "../../migrations_test")
 	uuidHarry, uuidKim := insertTestData(t, db)
 
 	return db, uuidHarry, uuidKim
@@ -177,7 +310,7 @@ func startPostgresContainer(t *testing.T) string {
 	return dataSourceName
 }
 
-func runMigrations(t *testing.T, db *sql.DB, migrationsDir string) {
+func runMigrations(t *testing.T, db *sql.DB, migrationsDir string, testMigrationsDir string) {
 	t.Helper()
 
 	if err := goose.SetDialect("postgres"); err != nil {
@@ -186,6 +319,9 @@ func runMigrations(t *testing.T, db *sql.DB, migrationsDir string) {
 
 	if err := goose.Up(db, migrationsDir); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
+	}
+	if err := goose.Up(db, testMigrationsDir); err != nil {
+		t.Fatalf("failed to run integration test migrations: %v", err)
 	}
 }
 
@@ -201,7 +337,7 @@ func insertTestData(t *testing.T, db *sql.DB) (uuid.UUID, uuid.UUID) {
         INSERT INTO users (uuid, username, email, full_name)
         VALUES
         ($1, 'tequila_sunset', 'harrier.dubois@rcm.org', 'Harrier Du Bois'),
-        ($2, 'kim',   'kim.kitsuragi@rcm.com', 'Kim Kitsuragi');
+        ($2, 'kim',   'kim.kitsuragi@rcm.org', 'Kim Kitsuragi');
     `, uuidHarry, uuidKim)
 	if err != nil {
 		t.Fatalf("failed to insert data: %v", err)

@@ -1,11 +1,14 @@
 package model
 
-import "github.com/google/uuid"
+import (
+	"database/sql"
+	"github.com/google/uuid"
+)
 
 type User struct {
-	ID       int    `json:"id"`
-	UUID     uuid.UUID `json:"uuid"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	FullName string `json:"full_name"`
+	ID       int
+	UUID     uuid.UUID
+	Username string
+	Email    string
+	FullName sql.NullString
 }

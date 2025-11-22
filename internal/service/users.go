@@ -1,11 +1,12 @@
 package service
 
 import (
+	"cruder/internal/controller/dto"
 	"cruder/internal/model"
 	"cruder/internal/repository"
-	"database/sql"
 	"errors"
 	"github.com/google/uuid"
+	"log/slog"
 )
 
 type UserService interface {
@@ -13,13 +14,12 @@ type UserService interface {
 	GetByUsername(username string) (*model.User, error)
 	GetByID(id int64) (*model.User, error)
 	DeleteByUuid(uuid uuid.UUID) error
+	PartiallyUpdateByUuid(uuid uuid.UUID, patch dto.UserPatch) error
 }
 
 type userService struct {
 	repo repository.UserRepository
 }
-
-var BusinessErrNoUsers = errors.New("users not found")
 
 func NewUserService(repo repository.UserRepository) UserService {
 	return &userService{repo: repo}
@@ -43,16 +43,19 @@ func (s *userService) GetByID(id int64) (*model.User, error) {
 
 func (s *userService) DeleteByUuid(uuid uuid.UUID) error {
 	err := s.repo.DeleteByUuid(uuid)
-	if errors.Is(err, sql.ErrNoRows) {
-		return BusinessErrNoUsers
-	}
+
+	return err
+}
+
+func (s *userService) PartiallyUpdateByUuid(uuid uuid.UUID, patch dto.UserPatch) error {
+	err := s.repo.PartiallyUpdateByUUID(uuid, patch)
 
 	return err
 }
 
 func getSingleUser(user *model.User, err error) (*model.User, error) {
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, BusinessErrNoUsers
+	if errors.Is(err, repository.BusinessErrNoUsers) {
+		slog.Warn("users not found")
 	}
 
 	return user, err
