@@ -1,18 +1,22 @@
 # Simple CRUD Interface
 
-Rewrite the README according to the application.
-
-The task itself can be found [here](/TASK.md)
+The task can be found [here](/TASK.md)
 
 ## Prerequisites
 
 - [Docker](https://www.docker.com/get-started/)
 - [Goose](https://github.com/pressly/goose)
 - [Gosec](https://github.com/securego/gosec)
+- Create .env file from .env.example. Default values are ok.
 
-## Getting Started
+## Just run it locally
 
-0. Create .env file from .env.example
+```
+## Via Docker
+docker compose up -d
+```
+
+## Setting up the development environment
 
 1. Start database
 

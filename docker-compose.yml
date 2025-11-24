@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:17
+    container_name: database
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+    volumes:
+      - cruder_data:/var/lib/postgresql/data
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - goose
+      - -dir
+      - /app/migrations
+      - postgres
+      - "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable"
+      - up
+    env_file:
+      - .env
+
+  app:
+    build:
+      context: .
+      target: app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_DSN: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable"
+    ports:
+      - "8080:8080"
+
+volumes:
+  cruder_data:

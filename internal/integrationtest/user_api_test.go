@@ -423,7 +423,7 @@ func startPostgresContainer(t *testing.T) string {
 	ctx := context.Background()
 	postgresContainer, err := postgres.Run(ctx,
 		"postgres:17",
-		postgres.WithDatabase("testdb"),
+		postgres.WithDatabase("crudertestdb"),
 		postgres.WithUsername("postgres"),
 		postgres.WithPassword("postgres"),
 		testcontainers.WithWaitStrategy(
@@ -446,7 +446,7 @@ func startPostgresContainer(t *testing.T) string {
 		t.Fatalf("failed to get mapped port: %v", err)
 	}
 	dataSourceName := fmt.Sprintf(
-		"postgres://postgres:postgres@%s:%s/testdb?sslmode=disable", host, port.Port())
+		"postgres://postgres:postgres@%s:%s/crudertestdb?sslmode=disable", host, port.Port())
 
 	return dataSourceName
 }

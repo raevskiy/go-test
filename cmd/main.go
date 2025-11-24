@@ -10,7 +10,7 @@ import (
 func main() {
 	dataSourceName := os.Getenv("POSTGRES_DSN")
 	if dataSourceName == "" {
-		dataSourceName = "host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable"
+		dataSourceName = "host=localhost port=5432 user=postgres password=postgres dbname=cruderdb sslmode=disable"
 	}
 
 	dbConnection, err := repository.NewPostgresConnection(dataSourceName)
