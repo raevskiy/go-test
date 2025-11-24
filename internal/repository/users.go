@@ -144,6 +144,7 @@ func (r *userRepository) PartiallyUpdateByUUID(
 
 	args = append(args, uuid)
 
+	// #nosec G201 -- placeholders are still in place
 	query := fmt.Sprintf(`UPDATE users SET %s WHERE uuid = $%d`,
 		strings.Join(setParts, ", "),
 		sqlPlaceholderIndex)
