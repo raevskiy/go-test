@@ -12,6 +12,8 @@ The task itself can be found [here](/TASK.md)
 
 ## Getting Started
 
+0. Create .env file from .env.example
+
 1. Start database
 
 ```
@@ -19,7 +21,7 @@ The task itself can be found [here](/TASK.md)
 make db
 
 ## Via Docker
-docker-compose up -d db
+docker compose -f docker-compose.dev.yml up -d
 ```
 
 2. Run migrations
