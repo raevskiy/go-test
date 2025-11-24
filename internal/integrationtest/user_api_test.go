@@ -102,7 +102,7 @@ func TestDeleteUserByUuid_Success(t *testing.T) {
 		t.Fatalf("user %s is expected to be present in the DB", harryUsername)
 	}
 
-	req, _ := http.NewRequest(http.MethodDelete, "/api/v1/users/" + uuidHarry.String(), nil)
+	req, _ := http.NewRequest(http.MethodDelete, "/api/v1/users/"+uuidHarry.String(), nil)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -136,7 +136,7 @@ func TestDeleteUserByINonExistentUuid_Failure(t *testing.T) {
 	repositories, router := core.SetupAppLayers(db)
 
 	randomUuid, _ := uuid.NewRandom()
-	req, _ := http.NewRequest(http.MethodDelete, "/api/v1/users/" + randomUuid.String(), nil)
+	req, _ := http.NewRequest(http.MethodDelete, "/api/v1/users/"+randomUuid.String(), nil)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -156,7 +156,7 @@ func TestPatchUserByUuid_Success(t *testing.T) {
 
 	body := `{"full_name": {"value": "Raphaël Ambrosius Costeau"}}`
 	req, _ := http.NewRequest(
-		http.MethodPatch, "/api/v1/users/" + uuidHarry.String(), bytes.NewBuffer([]byte(body)))
+		http.MethodPatch, "/api/v1/users/"+uuidHarry.String(), bytes.NewBuffer([]byte(body)))
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -175,7 +175,7 @@ func TestPatchUserByUuidWithNullFullName_Success(t *testing.T) {
 
 	body := `{"full_name": null}`
 	req, _ := http.NewRequest(
-		http.MethodPatch, "/api/v1/users/" + uuidHarry.String(), bytes.NewBuffer([]byte(body)))
+		http.MethodPatch, "/api/v1/users/"+uuidHarry.String(), bytes.NewBuffer([]byte(body)))
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -194,7 +194,7 @@ func TestPatchUserByUuidWithExplicitlyErasedFullName_Success(t *testing.T) {
 
 	body := `{"full_name": {"value": null}}`
 	req, _ := http.NewRequest(
-		http.MethodPatch, "/api/v1/users/" + uuidHarry.String(), bytes.NewBuffer([]byte(body)))
+		http.MethodPatch, "/api/v1/users/"+uuidHarry.String(), bytes.NewBuffer([]byte(body)))
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -213,7 +213,7 @@ func TestPatchUserByUuidWithImplicitlyErasedFullName_Success(t *testing.T) {
 
 	body := `{"full_name": {}}`
 	req, _ := http.NewRequest(
-		http.MethodPatch, "/api/v1/users/" + uuidHarry.String(), bytes.NewBuffer([]byte(body)))
+		http.MethodPatch, "/api/v1/users/"+uuidHarry.String(), bytes.NewBuffer([]byte(body)))
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -232,7 +232,7 @@ func TestPatchUserByUuidWithExistingUsername_Failure(t *testing.T) {
 
 	body := `{"username": "kim"}`
 	req, _ := http.NewRequest(
-		http.MethodPatch, "/api/v1/users/" + uuidHarry.String(), bytes.NewBuffer([]byte(body)))
+		http.MethodPatch, "/api/v1/users/"+uuidHarry.String(), bytes.NewBuffer([]byte(body)))
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -252,7 +252,7 @@ func TestPatchUserByUuidWithExistingEmail_Failure(t *testing.T) {
 
 	body := `{"email": "kim.kitsuragi@rcm.org"}`
 	req, _ := http.NewRequest(
-		http.MethodPatch, "/api/v1/users/" + uuidHarry.String(), bytes.NewBuffer([]byte(body)))
+		http.MethodPatch, "/api/v1/users/"+uuidHarry.String(), bytes.NewBuffer([]byte(body)))
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -272,7 +272,7 @@ func TestPatchUserByUuidWithNonExistentUuid_Failure(t *testing.T) {
 	randomUuid, _ := uuid.NewRandom()
 
 	req, _ := http.NewRequest(
-		http.MethodPatch, "/api/v1/users/" + randomUuid.String(), bytes.NewBuffer([]byte(body)))
+		http.MethodPatch, "/api/v1/users/"+randomUuid.String(), bytes.NewBuffer([]byte(body)))
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, req)
 
@@ -302,7 +302,7 @@ func TestCreateUser_Success(t *testing.T) {
 	assertThatUserFieldsAreExpected(t, userResponse,
 		klaasjeUserName, klaasjeFullName, klaasjeEmail)
 	user, err := repositories.Users.GetByUsername(klaasjeUserName)
-	if (err != nil) {
+	if err != nil {
 		t.Fatalf("user %s cannot be obtained from the DB", klaasjeUserName)
 	}
 	if user.FullName.String != klaasjeFullName || user.Email != klaasjeEmail {
@@ -331,7 +331,7 @@ func TestCreateUserWithoutFullName_Success(t *testing.T) {
 	assertThatUsernameAndEmailAreExpected(t, userResponse,
 		klaasjeUserName, klaasjeEmail)
 	user, err := repositories.Users.GetByUsername(klaasjeUserName)
-	if (err != nil) {
+	if err != nil {
 		t.Fatalf("user %s cannot be obtained from the DB", klaasjeUserName)
 	}
 	if user.FullName.Valid || user.Email != klaasjeEmail {
@@ -536,4 +536,3 @@ func assertThatErrorMessageIsExpected(t *testing.T, responseRecorder *httptest.R
 		t.Fatalf("unexpected error message: %+v", jsonError)
 	}
 }
-

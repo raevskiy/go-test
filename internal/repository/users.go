@@ -29,6 +29,7 @@ var BusinessErrNoUsers = errors.New("users not found")
 var BusinessErrUsernameTaken = errors.New("the username is already taken")
 var BusinessErrEmailTaken = errors.New("the email is already in use")
 var BusinessErrUnknownConflict = errors.New("unknown conflict")
+
 const uniqueConstraintViolationCode = "23505"
 
 func NewUserRepository(db *sql.DB) UserRepository {
@@ -176,7 +177,7 @@ func (r *userRepository) Create(user dto.UserCreate) (*model.User, error) {
 		query,
 		user.Username, user.Email, fullNameValue,
 	).Scan(
-		&createdUser.ID, &createdUser.UUID, &createdUser.Username,	&createdUser.Email,	&createdUser.FullName)
+		&createdUser.ID, &createdUser.UUID, &createdUser.Username, &createdUser.Email, &createdUser.FullName)
 
 	if err != nil {
 		return nil, processConstraintViolations(err)
@@ -215,5 +216,3 @@ func ensureSomeRowsAffected(result sql.Result) error {
 
 	return nil
 }
-
-

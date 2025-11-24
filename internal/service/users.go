@@ -61,4 +61,3 @@ func getSingleUser(user *model.User, err error) (*model.User, error) {
 
 	return user, err
 }
-
