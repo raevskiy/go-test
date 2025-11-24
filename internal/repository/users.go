@@ -18,6 +18,7 @@ type UserRepository interface {
 	GetByID(id int64) (*model.User, error)
 	DeleteByUuid(uuid uuid.UUID) error
 	PartiallyUpdateByUUID(uuid uuid.UUID, patch dto.UserPatch) error
+	Create(user dto.UserCreate) (*model.User, error)
 }
 
 type userRepository struct {
@@ -103,16 +104,7 @@ func (r *userRepository) DeleteByUuid(uuid uuid.UUID) error {
 		return err
 	}
 
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if affected == 0 {
-		return BusinessErrNoUsers
-	}
-
-	return nil
+	return ensureSomeRowsAffected(result)
 }
 
 func (r *userRepository) PartiallyUpdateByUUID(
@@ -151,32 +143,68 @@ func (r *userRepository) PartiallyUpdateByUUID(
 
 	args = append(args, uuid)
 
-	query := fmt.Sprintf(`
-        UPDATE users
-        SET %s
-        WHERE uuid = $%d
-    `, strings.Join(setParts, ", "), sqlPlaceholderIndex)
+	query := fmt.Sprintf(`UPDATE users SET %s WHERE uuid = $%d`,
+		strings.Join(setParts, ", "),
+		sqlPlaceholderIndex)
 
 	result, err := r.db.ExecContext(context.Background(), query, args...)
 	if err != nil {
-		var pgErr *pq.Error
-		if errors.As(err, &pgErr) {
-			switch pgErr.Code {
-			case uniqueConstraintViolationCode:
-				switch pgErr.Constraint {
-				case "users_username_key":
-					return BusinessErrUsernameTaken
-				case "users_email_key":
-					return BusinessErrEmailTaken
-				default:
-					return BusinessErrUnknownConflict
-				}
-			}
-		}
-
-		return err
+		return processConstraintViolations(err)
 	}
 
+	return ensureSomeRowsAffected(result)
+}
+
+func (r *userRepository) Create(user dto.UserCreate) (*model.User, error) {
+	var fullNameValue sql.NullString
+	if user.FullName != nil {
+		fullNameValue = sql.NullString{
+			String: *user.FullName,
+			Valid:  true,
+		}
+	}
+
+	const query = `
+        INSERT INTO users (username, email, full_name)
+        VALUES ($1, $2, $3)
+        RETURNING id, uuid, username, email, full_name
+    `
+
+	var createdUser model.User
+	err := r.db.QueryRowContext(
+		context.Background(),
+		query,
+		user.Username, user.Email, fullNameValue,
+	).Scan(
+		&createdUser.ID, &createdUser.UUID, &createdUser.Username,	&createdUser.Email,	&createdUser.FullName)
+
+	if err != nil {
+		return nil, processConstraintViolations(err)
+	}
+
+	return &createdUser, nil
+}
+
+func processConstraintViolations(err error) error {
+	var pgErr *pq.Error
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case uniqueConstraintViolationCode:
+			switch pgErr.Constraint {
+			case "users_username_key":
+				return BusinessErrUsernameTaken
+			case "users_email_key":
+				return BusinessErrEmailTaken
+			default:
+				return BusinessErrUnknownConflict
+			}
+		}
+	}
+
+	return err
+}
+
+func ensureSomeRowsAffected(result sql.Result) error {
 	rows, err := result.RowsAffected()
 	if err != nil {
 		return err
@@ -185,5 +213,7 @@ func (r *userRepository) PartiallyUpdateByUUID(
 		return BusinessErrNoUsers
 	}
 
-	return err
+	return nil
 }
+
+

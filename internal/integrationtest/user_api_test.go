@@ -21,7 +21,7 @@ import (
 
 func TestGetAllUsers_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db, _, _ := prepareDb(t)
+	db, _, _ := prepareDbWithTestData(t)
 	_, router := core.SetupAppLayers(db)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/v1/users/", nil)
@@ -36,13 +36,34 @@ func TestGetAllUsers_Success(t *testing.T) {
 	if len(users) != 2 {
 		t.Fatalf("expected 2 users added in this test, got %d", len(users))
 	}
-	assertThatUserNamesAreExpected(t, users[0], "tequila_sunset", "Harrier Du Bois")
-	assertThatUserNamesAreExpected(t, users[1], "kim", "Kim Kitsuragi")
+	assertThatUserFieldsAreExpected(t, users[0],
+		"tequila_sunset", "Harrier Du Bois", "harrier.dubois@rcm.org")
+	assertThatUserFieldsAreExpected(t, users[1],
+		"kim", "Kim Kitsuragi", "kim.kitsuragi@rcm.org")
+}
+
+func TestGetAllUsersOnEmptyDb_Success(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := prepareDb(t)
+	_, router := core.SetupAppLayers(db)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/users/", nil)
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusOK)
+	var users []map[string]interface{}
+	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &users); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(users) != 0 {
+		t.Fatalf("expected no users at all, got %d", len(users))
+	}
 }
 
 func TestGetUserByUsername_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db, _, _ := prepareDb(t)
+	db, _, _ := prepareDbWithTestData(t)
 	_, router := core.SetupAppLayers(db)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/v1/users/username/kim", nil)
@@ -54,12 +75,13 @@ func TestGetUserByUsername_Success(t *testing.T) {
 	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &user); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
-	assertThatUserNamesAreExpected(t, user, "kim", "Kim Kitsuragi")
+	assertThatUserFieldsAreExpected(t, user,
+		"kim", "Kim Kitsuragi", "kim.kitsuragi@rcm.org")
 }
 
 func TestGetUserByNonExistentUsername_Failure(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db, _, _ := prepareDb(t)
+	db, _, _ := prepareDbWithTestData(t)
 	_, router := core.SetupAppLayers(db)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/v1/users/username/klaasje", nil)
@@ -73,7 +95,7 @@ func TestGetUserByNonExistentUsername_Failure(t *testing.T) {
 func TestDeleteUserByUuid_Success(t *testing.T) {
 	harryUsername := "tequila_sunset"
 	gin.SetMode(gin.TestMode)
-	db, uuidHarry, _ := prepareDb(t)
+	db, uuidHarry, _ := prepareDbWithTestData(t)
 	repositories, router := core.SetupAppLayers(db)
 	user, err := repositories.Users.GetByUsername(harryUsername)
 	if user == nil || err != nil {
@@ -93,7 +115,7 @@ func TestDeleteUserByUuid_Success(t *testing.T) {
 
 func TestDeleteUserByInvalidUuid_Failure(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db, _, _ := prepareDb(t)
+	db, _, _ := prepareDbWithTestData(t)
 	repositories, router := core.SetupAppLayers(db)
 
 	req, _ := http.NewRequest(http.MethodDelete, "/api/v1/users/worst-uuid-ever", nil)
@@ -110,7 +132,7 @@ func TestDeleteUserByInvalidUuid_Failure(t *testing.T) {
 
 func TestDeleteUserByINonExistentUuid_Failure(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db, _, _ := prepareDb(t)
+	db, _, _ := prepareDbWithTestData(t)
 	repositories, router := core.SetupAppLayers(db)
 
 	randomUuid, _ := uuid.NewRandom()
@@ -129,7 +151,7 @@ func TestDeleteUserByINonExistentUuid_Failure(t *testing.T) {
 func TestPatchUserByUuid_Success(t *testing.T) {
 	harryUsername := "tequila_sunset"
 	gin.SetMode(gin.TestMode)
-	db, uuidHarry, _ := prepareDb(t)
+	db, uuidHarry, _ := prepareDbWithTestData(t)
 	repositories, router := core.SetupAppLayers(db)
 
 	body := `{"full_name": {"value": "Raphaël Ambrosius Costeau"}}`
@@ -148,7 +170,7 @@ func TestPatchUserByUuid_Success(t *testing.T) {
 func TestPatchUserByUuidWithNullFullName_Success(t *testing.T) {
 	harryUsername := "tequila_sunset"
 	gin.SetMode(gin.TestMode)
-	db, uuidHarry, _ := prepareDb(t)
+	db, uuidHarry, _ := prepareDbWithTestData(t)
 	repositories, router := core.SetupAppLayers(db)
 
 	body := `{"full_name": null}`
@@ -167,7 +189,7 @@ func TestPatchUserByUuidWithNullFullName_Success(t *testing.T) {
 func TestPatchUserByUuidWithExplicitlyErasedFullName_Success(t *testing.T) {
 	harryUsername := "tequila_sunset"
 	gin.SetMode(gin.TestMode)
-	db, uuidHarry, _ := prepareDb(t)
+	db, uuidHarry, _ := prepareDbWithTestData(t)
 	repositories, router := core.SetupAppLayers(db)
 
 	body := `{"full_name": {"value": null}}`
@@ -186,7 +208,7 @@ func TestPatchUserByUuidWithExplicitlyErasedFullName_Success(t *testing.T) {
 func TestPatchUserByUuidWithImplicitlyErasedFullName_Success(t *testing.T) {
 	harryUsername := "tequila_sunset"
 	gin.SetMode(gin.TestMode)
-	db, uuidHarry, _ := prepareDb(t)
+	db, uuidHarry, _ := prepareDbWithTestData(t)
 	repositories, router := core.SetupAppLayers(db)
 
 	body := `{"full_name": {}}`
@@ -205,7 +227,7 @@ func TestPatchUserByUuidWithImplicitlyErasedFullName_Success(t *testing.T) {
 func TestPatchUserByUuidWithExistingUsername_Failure(t *testing.T) {
 	kimUsername := "kim"
 	gin.SetMode(gin.TestMode)
-	db, uuidHarry, _ := prepareDb(t)
+	db, uuidHarry, _ := prepareDbWithTestData(t)
 	repositories, router := core.SetupAppLayers(db)
 
 	body := `{"username": "kim"}`
@@ -225,7 +247,7 @@ func TestPatchUserByUuidWithExistingUsername_Failure(t *testing.T) {
 func TestPatchUserByUuidWithExistingEmail_Failure(t *testing.T) {
 	harryUsername := "tequila_sunset"
 	gin.SetMode(gin.TestMode)
-	db, uuidHarry, _ := prepareDb(t)
+	db, uuidHarry, _ := prepareDbWithTestData(t)
 	repositories, router := core.SetupAppLayers(db)
 
 	body := `{"email": "kim.kitsuragi@rcm.org"}`
@@ -244,7 +266,7 @@ func TestPatchUserByUuidWithExistingEmail_Failure(t *testing.T) {
 
 func TestPatchUserByUuidWithNonExistentUuid_Failure(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db, _, _ := prepareDb(t)
+	db, _, _ := prepareDbWithTestData(t)
 	_, router := core.SetupAppLayers(db)
 	body := `{"username": "klaasje"}`
 	randomUuid, _ := uuid.NewRandom()
@@ -258,7 +280,127 @@ func TestPatchUserByUuidWithNonExistentUuid_Failure(t *testing.T) {
 	assertThatErrorMessageIsExpected(t, responseRecorder, "users not found")
 }
 
-func prepareDb(t *testing.T) (*sql.DB, uuid.UUID, uuid.UUID) {
+func TestCreateUser_Success(t *testing.T) {
+	klaasjeUserName := "klaasje"
+	klaasjeFullName := "Klaasje Amandou"
+	klaasjeEmail := "klaasje.amandou@noname.com"
+	gin.SetMode(gin.TestMode)
+	db, _, _ := prepareDbWithTestData(t)
+	repositories, router := core.SetupAppLayers(db)
+
+	body := `{"username": "klaasje", "full_name": "Klaasje Amandou", "email": "klaasje.amandou@noname.com"}`
+	req, _ := http.NewRequest(
+		http.MethodPost, "/api/v1/users", bytes.NewBuffer([]byte(body)))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusCreated)
+	var userResponse map[string]interface{}
+	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &userResponse); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	assertThatUserFieldsAreExpected(t, userResponse,
+		klaasjeUserName, klaasjeFullName, klaasjeEmail)
+	user, err := repositories.Users.GetByUsername(klaasjeUserName)
+	if (err != nil) {
+		t.Fatalf("user %s cannot be obtained from the DB", klaasjeUserName)
+	}
+	if user.FullName.String != klaasjeFullName || user.Email != klaasjeEmail {
+		t.Fatalf("user %s has an unxpected fields", klaasjeUserName)
+	}
+}
+
+func TestCreateUserWithoutFullName_Success(t *testing.T) {
+	klaasjeUserName := "klaasje"
+	klaasjeEmail := "klaasje.amandou@noname.com"
+	gin.SetMode(gin.TestMode)
+	db, _, _ := prepareDbWithTestData(t)
+	repositories, router := core.SetupAppLayers(db)
+
+	body := `{"username": "klaasje", "email": "klaasje.amandou@noname.com"}`
+	req, _ := http.NewRequest(
+		http.MethodPost, "/api/v1/users", bytes.NewBuffer([]byte(body)))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusCreated)
+	var userResponse map[string]interface{}
+	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &userResponse); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	assertThatUsernameAndEmailAreExpected(t, userResponse,
+		klaasjeUserName, klaasjeEmail)
+	user, err := repositories.Users.GetByUsername(klaasjeUserName)
+	if (err != nil) {
+		t.Fatalf("user %s cannot be obtained from the DB", klaasjeUserName)
+	}
+	if user.FullName.Valid || user.Email != klaasjeEmail {
+		t.Fatalf("user %s has an unxpected fields", klaasjeUserName)
+	}
+}
+
+func TestCreateUserOnSlightlyDifferentUrl_Success(t *testing.T) {
+	klaasjeUserName := "klaasje"
+	klaasjeEmail := "klaasje.amandou@noname.com"
+	gin.SetMode(gin.TestMode)
+	db, _, _ := prepareDbWithTestData(t)
+	_, router := core.SetupAppLayers(db)
+
+	body := `{"username": "klaasje", "email": "klaasje.amandou@noname.com"}`
+	req, _ := http.NewRequest(
+		http.MethodPost, "/api/v1/users/", bytes.NewBuffer([]byte(body)))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusCreated)
+	var userResponse map[string]interface{}
+	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &userResponse); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	assertThatUsernameAndEmailAreExpected(t, userResponse,
+		klaasjeUserName, klaasjeEmail)
+}
+
+func TestCreateUserWithExistingUsername_Failure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _, _ := prepareDbWithTestData(t)
+	_, router := core.SetupAppLayers(db)
+
+	body := `{"username": "kim", "email": "klaasje.amandou@noname.com"}`
+	req, _ := http.NewRequest(
+		http.MethodPost, "/api/v1/users", bytes.NewBuffer([]byte(body)))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusConflict)
+	assertThatErrorMessageIsExpected(t, responseRecorder, "the username is already taken")
+}
+
+func TestCreateUserWithExistingEmail_Failure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _, _ := prepareDbWithTestData(t)
+	_, router := core.SetupAppLayers(db)
+
+	body := `{"username": "klaasje", "email": "kim.kitsuragi@rcm.org"}`
+	req, _ := http.NewRequest(
+		http.MethodPost, "/api/v1/users", bytes.NewBuffer([]byte(body)))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+
+	assertThatResponseCodeIsExpected(t, responseRecorder, http.StatusConflict)
+	assertThatErrorMessageIsExpected(t, responseRecorder, "the email is already in use")
+}
+
+func prepareDbWithTestData(t *testing.T) (*sql.DB, uuid.UUID, uuid.UUID) {
+	t.Helper()
+
+	db := prepareDb(t)
+	uuidHarry, uuidKim := insertTestData(t, db)
+
+	return db, uuidHarry, uuidKim
+}
+
+func prepareDb(t *testing.T) *sql.DB {
 	t.Helper()
 
 	dataSourceName := startPostgresContainer(t)
@@ -271,9 +413,8 @@ func prepareDb(t *testing.T) (*sql.DB, uuid.UUID, uuid.UUID) {
 	})
 
 	runMigrations(t, db, "../../migrations", "../../migrations_test")
-	uuidHarry, uuidKim := insertTestData(t, db)
 
-	return db, uuidHarry, uuidKim
+	return db
 }
 
 func startPostgresContainer(t *testing.T) string {
@@ -354,10 +495,31 @@ func assertThatResponseCodeIsExpected(t *testing.T, responseRecorder *httptest.R
 	}
 }
 
-func assertThatUserNamesAreExpected(t *testing.T, user map[string]interface{}, expectedUserName string, expectedFullName string) {
+func assertThatUserFieldsAreExpected(
+	t *testing.T,
+	user map[string]interface{},
+	expectedUserName string,
+	expectedFullName string,
+	expectedEmail string) {
 	t.Helper()
 
-	if user["username"] != expectedUserName || user["full_name"] != expectedFullName {
+	if user["username"] != expectedUserName ||
+		user["full_name"] != expectedFullName ||
+		user["email"] != expectedEmail {
+		t.Fatalf("unexpected user: %+v", user)
+	}
+}
+
+func assertThatUsernameAndEmailAreExpected(
+	t *testing.T,
+	user map[string]interface{},
+	expectedUserName string,
+	expectedEmail string) {
+	t.Helper()
+
+	if user["username"] != expectedUserName ||
+		user["full_name"] != nil ||
+		user["email"] != expectedEmail {
 		t.Fatalf("unexpected user: %+v", user)
 	}
 }

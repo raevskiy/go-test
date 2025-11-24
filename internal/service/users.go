@@ -15,6 +15,7 @@ type UserService interface {
 	GetByID(id int64) (*model.User, error)
 	DeleteByUuid(uuid uuid.UUID) error
 	PartiallyUpdateByUuid(uuid uuid.UUID, patch dto.UserPatch) error
+	Create(user dto.UserCreate) (*model.User, error)
 }
 
 type userService struct {
@@ -42,15 +43,15 @@ func (s *userService) GetByID(id int64) (*model.User, error) {
 }
 
 func (s *userService) DeleteByUuid(uuid uuid.UUID) error {
-	err := s.repo.DeleteByUuid(uuid)
-
-	return err
+	return s.repo.DeleteByUuid(uuid)
 }
 
 func (s *userService) PartiallyUpdateByUuid(uuid uuid.UUID, patch dto.UserPatch) error {
-	err := s.repo.PartiallyUpdateByUUID(uuid, patch)
+	return s.repo.PartiallyUpdateByUUID(uuid, patch)
+}
 
-	return err
+func (s *userService) Create(user dto.UserCreate) (*model.User, error) {
+	return s.repo.Create(user)
 }
 
 func getSingleUser(user *model.User, err error) (*model.User, error) {

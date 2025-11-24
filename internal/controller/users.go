@@ -86,6 +86,17 @@ func (c *UserController) PatchUserByUuid(ctx *gin.Context) {
 	createNoContentResponse(err, ctx)
 }
 
+func (c *UserController) CreateUser(ctx *gin.Context) {
+	var user dto.UserCreate
+	if err := ctx.ShouldBindJSON(&user); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	createdUser, err := c.service.Create(user)
+	createCreatedResponse(createdUser, err, ctx)
+}
+
 func createSingleUserResponse(user *model.User, err error, ctx *gin.Context) {
 	if errors.Is(err, repository.BusinessErrNoUsers) {
 		ctx.JSON(http.StatusNotFound, gin.H{errorKey: err.Error()})
@@ -116,6 +127,21 @@ func createNoContentResponse(err error, ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusNoContent, nil)
+}
+
+func createCreatedResponse(user *model.User, err error, ctx *gin.Context) {
+	if errors.Is(err, repository.BusinessErrUsernameTaken) ||
+		errors.Is(err, repository.BusinessErrEmailTaken) ||
+		errors.Is(err, repository.BusinessErrUnknownConflict) {
+		ctx.JSON(http.StatusConflict, gin.H{errorKey: err.Error()})
+		return
+	}
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{errorKey: genericServerErrorValue})
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, toUserResponse(user))
 }
 
 func toUserResponses(users []model.User) []dto.UserResponse {

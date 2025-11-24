@@ -16,3 +16,9 @@ type UserPatch struct {
 	Email    *string `json:"email"`
 	FullName *ErasableString `json:"full_name"`
 }
+
+type UserCreate struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	FullName *string `json:"full_name"`
+}
