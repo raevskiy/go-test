@@ -36,7 +36,7 @@ run:
 	go run cmd/main.go
 
 db:
-	docker-compose up -d db
+	docker compose -f docker-compose.dev.yml up -d
 
 up:
 	docker-compose up --build

@@ -33,11 +33,6 @@ docker compose -f docker-compose.dev.yml up -d
 ```
 ## Via Makefile
 make migrate-up
-
-## Via Goose
-DB_DRIVER=postgres
-DB_STRING="host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable"
-goose -dir ./migrations $(DB_DRIVER) $(DB_STRING) up
 ```
 
 3. Run application
