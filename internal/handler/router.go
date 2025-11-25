@@ -2,12 +2,15 @@ package handler
 
 import (
 	"cruder/internal/controller"
-
+	"cruder/internal/middleware"
 	"github.com/gin-gonic/gin"
 )
 
-func New(router *gin.Engine, userController *controller.UserController) *gin.Engine {
-	apiV1Group := router.Group("/api/v1")
+func New(
+	router *gin.Engine,
+	userController *controller.UserController,
+	apiKey string) *gin.Engine {
+	apiV1Group := router.Group("/api/v1", middleware.APIKeyAuth(apiKey))
 	{
 		userGroup := apiV1Group.Group("/users")
 		{

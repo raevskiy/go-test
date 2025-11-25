@@ -9,12 +9,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupAppLayers(db *sql.DB) (*repository.Repository, *gin.Engine) {
+func SetupAppLayers(db *sql.DB, xApiKey string) (*repository.Repository, *gin.Engine) {
 	repositories := repository.NewRepository(db)
 	services := service.NewService(repositories)
 	controllers := controller.NewController(services)
 	httpRouterEngine := gin.Default()
-	handler.New(httpRouterEngine, controllers.Users)
+	handler.New(httpRouterEngine, controllers.Users, xApiKey)
 
 	return repositories, httpRouterEngine
 }

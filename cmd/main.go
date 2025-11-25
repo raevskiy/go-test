@@ -18,7 +18,7 @@ func main() {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 
-	_, httpRouterEngine := core.SetupAppLayers(dbConnection.DB())
+	_, httpRouterEngine := core.SetupAppLayers(dbConnection.DB(), os.Getenv("X_API_KEY"))
 	if err := httpRouterEngine.Run(); err != nil {
 		log.Fatalf("failed to run server: %v", err)
 	}
