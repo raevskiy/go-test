@@ -33,7 +33,9 @@ func prepareDb(t *testing.T) *sql.DB {
 		t.Fatalf("failed to open DB: %v", err)
 	}
 	t.Cleanup(func() {
-		db.Close()
+		if err := db.Close(); err != nil {
+			t.Logf("WARN: failed to close DB: %v", err)
+		}
 	})
 
 	runMigrations(t, db, "../../migrations", "../../migrations_test")
@@ -58,7 +60,9 @@ func startPostgresContainer(t *testing.T) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		postgresContainer.Terminate(ctx)
+		if err := postgresContainer.Terminate(ctx); err != nil {
+			t.Logf("WARN: failed to terminate postgres container: %v", err)
+		}
 	})
 
 	host, err := postgresContainer.Host(ctx)
