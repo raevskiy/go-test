@@ -57,8 +57,7 @@ func (c *UserController) GetUserByID(ctx *gin.Context) {
 }
 
 func (c *UserController) DeleteUserByUuid(ctx *gin.Context) {
-	uuidStr := ctx.Param("uuid")
-	aUuid, err := uuid.Parse(uuidStr)
+	aUuid, err := parseUuid(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{errorKey: invalidUuidIdClientErrorValue})
 		return
@@ -69,8 +68,7 @@ func (c *UserController) DeleteUserByUuid(ctx *gin.Context) {
 }
 
 func (c *UserController) PatchUserByUuid(ctx *gin.Context) {
-	uuidStr := ctx.Param("uuid")
-	aUuid, err := uuid.Parse(uuidStr)
+	aUuid, err := parseUuid(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{errorKey: invalidUuidIdClientErrorValue})
 		return
@@ -95,6 +93,11 @@ func (c *UserController) CreateUser(ctx *gin.Context) {
 
 	createdUser, err := c.service.Create(user)
 	createCreatedResponse(createdUser, err, ctx)
+}
+
+func parseUuid(ctx *gin.Context) (uuid.UUID, error) {
+	uuidStr := ctx.Param("uuid")
+	return uuid.Parse(uuidStr)
 }
 
 func createSingleUserResponse(user *model.User, err error, ctx *gin.Context) {
