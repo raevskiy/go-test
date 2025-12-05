@@ -1,6 +1,6 @@
 # Simple CRUD Interface
 
-The task can be found [here](/TASK.md)
+This repository is designed for roasting, in educational purpose. The task can be found [here](/TASK.md)
 
 ## Prerequisites
 
